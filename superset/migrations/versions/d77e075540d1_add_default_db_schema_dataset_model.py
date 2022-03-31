@@ -29,6 +29,7 @@ down_revision = "58df9d617f14"
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects.mysql.base import MySQLDialect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -61,24 +62,44 @@ class Dataset(Base):
 
 
 def upgrade():
-    op.add_column(
-        "sl_datasets",
-        sa.Column("default_schema", sa.Text(), nullable=False, server_default="public"),
-    )
-    op.add_column(
-        "sl_datasets",
-        sa.Column("database_id", sa.Integer(), nullable=False, server_default="0"),
-    )
-
     bind = op.get_bind()
     session = db.Session(bind=bind)
 
+    if isinstance(bind.dialect, MySQLDialect):
+        op.add_column(
+            "sl_datasets",
+            sa.Column(
+                "default_schema",
+                sa.Text(),
+                nullable=False,
+                default="public",
+            ),
+        )
+        op.add_column(
+            "sl_datasets",
+            sa.Column("database_id", sa.Integer(), nullable=False, default="0"),
+        )
+    else:
+        op.add_column(
+            "sl_datasets",
+            sa.Column(
+                "default_schema",
+                sa.Text(),
+                nullable=False,
+                server_default="public",
+            ),
+        )
+        op.add_column(
+            "sl_datasets",
+            sa.Column("database_id", sa.Integer(), nullable=False, server_default="0"),
+        )
     for sqlatable in session.query(SqlaTable).all():
         ds = session.query(Dataset).filter(Dataset.sqlatable_id == sqlatable.id).one()
         ds.default_schema = sqlatable.schema
         ds.database_id = sqlatable.database_id
 
     session.commit()
+    session.close()
 
 
 def downgrade():
